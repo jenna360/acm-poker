@@ -32,14 +32,14 @@ class Pot:
     players: list[str]
 
 class GameState:
-    index_to_action: int
+    index_to_action: int # your index, for example, bet_money[index_to_action] is your bot's current betting amount
     index_of_small_blind: int
-    players: list[str]
-    player_cards: list[str]
+    players: list[str] # list of bots' id, ordered according to their seats
+    player_cards: list[str] # list of your cards
     held_money: list[int]
     bet_money: list[int]  # -1 for fold, 0 for check/hasn't bet
     community_cards: list[str]
-    pots: list[Pot]
+    pots: list[Pot] # a list of dicts that contain "value" and "players". "value" is the amount in that pot, "players" are the eligible players to win that pot.
     small_blind: int
     big_blind: int
 ```
@@ -66,7 +66,7 @@ Example Interpretation:
 
 ## Code Specification & Libraries
 - Only Python 3.11 is allowed.
-- We only allow some standard Python libraries (support for mainstream external libraries will come next time)
+- We only allow some standard Python libraries and numpy
 - List of black listed standard libraries can be found [here](https://docs.google.com/document/d/1Q78tdVFAZIFt0ZWEgNG65nDDAlbt6rcG5o21waeZprA/edit?usp=sharing).
 
 
