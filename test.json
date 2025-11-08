@@ -1,0 +1,12 @@
+{
+    "index_to_action": 2,
+    "index_of_small_blind": 0,
+    "players": ["team_id0", "team_id1", "team_id2"],
+    "player_cards": ["2s", "7s"],
+    "held_money": [100, 200, 300],
+    "bet_money": [20, -1, 0],
+    "community_cards": ["ac", "2h", "2d"],
+    "pots": [{ "value": 50, "players": ["team_id0", "team_id2"] }],
+    "small_blind": 5,
+    "big_blind": 10
+}

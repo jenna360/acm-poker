@@ -46,3 +46,8 @@ class Memory:
 def bet(state: GameState, memory: Memory | None=None) -> tuple[int, Memory | None]:
     bet_amount = 0
     return (bet_amount, memory)
+
+#delete later
+def test(state: GameState, memory: Memory | None=None):
+    print(f"Position measure: {position(state)}")
+    print(f"Pot odds: ", {pot_odds(state)})

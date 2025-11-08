@@ -286,3 +286,27 @@ def deck_remaining(state: GameState) -> list[tuple[int, str]]:
 
     remaining_cards = full_deck - dealt_cards
     return [parse_card(card) for card in remaining_cards]
+
+
+# returns a fraction indicating position
+# - smaller fraction means lower position (eg 1/7)
+# - higher fraction means later position (eg 6/7)
+def position(state: GameState) -> float:
+    num_players = len(state.players)
+    our_index = state.index_to_action
+    small_blind = state.index_of_small_blind
+    return ((our_index - small_blind) % num_players) / num_players
+
+
+def pot_odds(state: GameState) -> float:
+    pot_before_call = 0
+    amt_to_call = amount_to_call(state);
+    pots = get_my_pots(state);
+    for pot in pots: # for each pot we're in, add the total of the pots
+        pot_before_call += pot.value
+    # print(f"Pot total {pot_before_call}")
+
+    return amt_to_call / (pot_before_call + amt_to_call)
+
+#def hand_equity(state: GameState) -> float:
+    
