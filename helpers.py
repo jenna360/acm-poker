@@ -334,20 +334,21 @@ def calculate_outs(state: GameState) -> dict:
             out_cards[card] = worth;
         return;
 
+    # to keep track of all cards we can see
+    dealt_cards = set()
+    # add player cards
+    for card in hole_cards:
+        if card:
+            dealt_cards.add(card)
+    # add community cards
+    for card in com_cards:
+        if card:
+            dealt_cards.add(card)
+
 
     # hand type functions:
 
     def four_of_a_kind() -> None:
-        # to keep track of all cards we can see
-        dealt_cards = set()
-        # add player cards
-        for card in hole_cards:
-            if card:
-                dealt_cards.add(card)
-        # add community cards
-        for card in com_cards:
-            if card:
-                dealt_cards.add(card)
 
         # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
         dealt_ranks = []
@@ -370,7 +371,7 @@ def calculate_outs(state: GameState) -> dict:
                     else: # not a face card
                         card_to_add = f"{rank_val}{suit}"
                     if card_to_add not in dealt_cards:
-                        add_out(card_to_add, 7)
+                        add_out(card_to_add, 3)
 
     def full_house() -> None:
         pass
@@ -382,16 +383,83 @@ def calculate_outs(state: GameState) -> dict:
         pass
 
     def three_of_a_kind() -> None:
-        pass
 
-    def two_pairs() -> None:
+        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
+        dealt_ranks = []
+        for card in dealt_cards:
+            dealt_ranks.append(parse_card(card)[0])
+
+        
+        from collections import Counter
+        # count each instance of seen ranks
+        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
+
+        # in case rank is 10-13, make dict to convert letter represenation later
+        face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+        for rank_val, count in cnt.items():
+            if count == 2:
+                for suit in "hdsc":
+                    if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                        card_to_add = f"{face_card[rank_val]}{suit}"
+                    else: # not a face card
+                        card_to_add = f"{rank_val}{suit}"
+                    if card_to_add not in dealt_cards:
+                        add_out(card_to_add, 3)
+
+
+    def two_pair() -> None:
         pass
 
     def high_pair() -> None:
-        pass
+
+        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
+        dealt_ranks = []
+        for card in dealt_cards:
+            dealt_ranks.append(parse_card(card)[0])
+
+        
+        from collections import Counter
+        # count each instance of seen ranks
+        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
+
+        # in case rank is 10-13, make dict to convert letter represenation later
+        face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+        for rank_val, count in cnt.items():
+            if count == 1 and rank_val > 8:
+                for suit in "hdsc":
+                    if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                        card_to_add = f"{face_card[rank_val]}{suit}"
+                    else: # not a face card
+                        card_to_add = f"{rank_val}{suit}"
+                    if card_to_add not in dealt_cards:
+                        add_out(card_to_add, 1)
 
     def low_pair() -> None:
-        pass
+
+        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
+        dealt_ranks = []
+        for card in dealt_cards:
+            dealt_ranks.append(parse_card(card)[0])
+
+        
+        from collections import Counter
+        # count each instance of seen ranks
+        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
+
+        # in case rank is 10-13, make dict to convert letter represenation later
+        face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+        for rank_val, count in cnt.items():
+            if count == 1 and rank_val <= 8:
+                for suit in "hdsc":
+                    if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                        card_to_add = f"{face_card[rank_val]}{suit}"
+                    else: # not a face card
+                        card_to_add = f"{rank_val}{suit}"
+                    if card_to_add not in dealt_cards:
+                        add_out(card_to_add, .5)
 
 
     # find all outs
@@ -401,7 +469,7 @@ def calculate_outs(state: GameState) -> dict:
     flush();
     straight();
     three_of_a_kind();
-    two_pairs();
+    two_pair();
     high_pair();
     low_pair();
 
