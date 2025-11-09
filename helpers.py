@@ -338,7 +338,39 @@ def calculate_outs(state: GameState) -> dict:
     # hand type functions:
 
     def four_of_a_kind() -> None:
-        pass
+        # to keep track of all cards we can see
+        dealt_cards = set()
+        # add player cards
+        for card in hole_cards:
+            if card:
+                dealt_cards.add(card)
+        # add community cards
+        for card in com_cards:
+            if card:
+                dealt_cards.add(card)
+
+        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
+        dealt_ranks = []
+        for card in dealt_cards:
+            dealt_ranks.append(parse_card(card)[0])
+
+        
+        from collections import Counter
+        # count each instance of seen ranks
+        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
+
+        # in case rank is 10-13, make dict to convert letter represenation later
+        face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+        for rank_val, count in cnt.items():
+            if count == 3:
+                for suit in "hdsc":
+                    if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                        card_to_add = f"{face_card[rank_val]}{suit}"
+                    else: # not a face card
+                        card_to_add = f"{rank_val}{suit}"
+                    if card_to_add not in dealt_cards:
+                        add_out(card_to_add, 7)
 
     def full_house() -> None:
         pass
