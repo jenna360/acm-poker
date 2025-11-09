@@ -288,6 +288,8 @@ def deck_remaining(state: GameState) -> list[tuple[int, str]]:
     return [parse_card(card) for card in remaining_cards]
 
 
+# our functions:
+
 # returns a fraction indicating position
 # - smaller fraction means lower position (eg 1/7)
 # - higher fraction means later position (eg 6/7)
@@ -309,4 +311,66 @@ def pot_odds(state: GameState) -> float:
     return amt_to_call / (pot_before_call + amt_to_call)
 
 #def hand_equity(state: GameState) -> float:
+
+
+# returns set of all out-cards and their worth
+def calculate_outs(state: GameState) -> dict:
+
+    out_cards = {} # key = out card (string), value = rank of hand type the card is for (int)
+    # for consistency when comparing keys: capitalize card suit (ex. '3H','JS','6D')
+
+    hole_cards = state.player_cards;
+    com_cards = state.community_cards;
     
+    # add out-card to set (use inside hand type functions)
+    def add_out(card: str, worth: int) -> None: # worth = rank assigned to each hand type
+        in_set_greater = False;
+        for key in out_cards:
+            if key==card and worth < out_cards[key]:
+                in_set_greater = True;
+                # the existing card worth is greater, so doesn't update the set
+                break;
+        if in_set_greater == False:
+            out_cards[card] = worth;
+        return;
+
+
+    # hand type functions:
+
+    def four_of_a_kind() -> None:
+        pass
+
+    def full_house() -> None:
+        pass
+
+    def flush() -> None:
+        pass
+
+    def straight() -> None:
+        pass
+
+    def three_of_a_kind() -> None:
+        pass
+
+    def two_pairs() -> None:
+        pass
+
+    def high_pair() -> None:
+        pass
+
+    def low_pair() -> None:
+        pass
+
+
+    # find all outs
+
+    four_of_a_kind();
+    full_house();
+    flush();
+    straight();
+    three_of_a_kind();
+    two_pairs();
+    high_pair();
+    low_pair();
+
+    return out_cards;
