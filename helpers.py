@@ -317,7 +317,7 @@ def pot_odds(state: GameState) -> float:
 def calculate_outs(state: GameState) -> dict:
 
     out_cards = {} # key = out card (string), value = rank of hand type the card is for (int)
-    # for consistency when comparing keys: capitalize card suit (ex. '3H','JS','6D')
+    # examples of keys (for consistency): '3h','js','6d'
 
     hole_cards = state.player_cards;
     com_cards = state.community_cards;
