@@ -377,7 +377,19 @@ def calculate_outs(state: GameState) -> dict:
         pass
 
     def flush() -> None:
-        pass
+        # store dealt cards (str) in lists based on suit
+        dealt_suits = {'h':[],'c':[],'d':[],'s':[]};
+        for card in dealt_cards:
+            dealt_suits[parse_card(card)[1].lower()].append(card);
+    
+        for suit in dealt_suits: # finds the cards necessary to make a flush of this suit
+            if len(dealt_suits[suit])==4:
+                ranks = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
+                for card in dealt_suits[suit]: # remove rank from possible out-card ranks
+                    ranks.pop(parse_card(card)[0]);
+                for r in ranks:
+                    add_out(f"{ranks[r]}{suit}",5);
+    
 
     def straight() -> None:
         pass

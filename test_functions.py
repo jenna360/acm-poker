@@ -1,6 +1,6 @@
-out_cards={'kc' : 4} # key = out card (string), value = rank of hand type the card is for (int)
-hole_cards={'kd':7,'jd':5}
-com_cards={'kh':7,'ks':5,'6d':2}
+out_cards={'6c':7}
+hole_cards=['5h','ac']
+com_cards=['7c','2c','jh','3c']
 
 # GIVEN FUNCTION: parse card string into (rank:int, suit:str)
 def parse_card(card: str) -> tuple[int, str]:
@@ -29,48 +29,38 @@ def calculate_outs() -> dict:
             out_cards[card] = worth;
         return;
 
+    # to keep track of all cards we can see
+    dealt_cards = set()
+    # add player cards
+    for card in hole_cards:
+        if card:
+            dealt_cards.add(card)
+    # add community cards
+    for card in com_cards:
+        if card:
+            dealt_cards.add(card)
 
     # hand type functions:
 
     def four_of_a_kind() -> None:
-
-        dealt_cards = set()
-        # add player cards
-        for card in hole_cards:
-            if card:
-                dealt_cards.add(card)
-        # add community cards
-        for card in com_cards:
-            if card:
-                dealt_cards.add(card)
-
-        # store all seen ranks -> dealt_ranks
-        dealt_ranks = []
-        for card in dealt_cards:
-            dealt_ranks.append(parse_card(card)[0])
-
-        
-        from collections import Counter
-        # count each instance of seen ranks
-        cnt = Counter(dealt_ranks)
-
-        face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'} # in case rank is 10-13
-
-        for rank_val, count in cnt.items():
-            if count == 3:
-                for suit in "hdsc":
-                    if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
-                        card_to_add = f"{face_card[rank_val]}{suit}"
-                    else:
-                        card_to_add = f"{rank_val}{suit}"
-                    if card_to_add not in dealt_cards:
-                        add_out(card_to_add, 7)
+        pass
 
     def full_house() -> None:
         pass
 
     def flush() -> None:
-        pass
+        # store dealt cards (str) in lists based on suit
+        dealt_suits = {'h':[],'c':[],'d':[],'s':[]};
+        for card in dealt_cards:
+            dealt_suits[parse_card(card)[1].lower()].append(card);
+    
+        for suit in dealt_suits: # finds the cards necessary to make a flush of this suit
+            if len(dealt_suits[suit])==4:
+                ranks = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
+                for card in dealt_suits[suit]: # remove rank from possible out-card ranks
+                    ranks.pop(parse_card(card)[0]);
+                for r in ranks:
+                    add_out(f"{ranks[r]}{suit}",5);
 
     def straight() -> None:
         pass
