@@ -1,6 +1,6 @@
-out_cards={'6c':7}
-hole_cards=['5h','ac']
-com_cards=['7c','2c','jh','3c']
+out_cards={}
+hole_cards=['2h','3c']
+com_cards=['3s','4d', '5s','kh']
 
 # GIVEN FUNCTION: parse card string into (rank:int, suit:str)
 def parse_card(card: str) -> tuple[int, str]:
@@ -49,21 +49,67 @@ def calculate_outs() -> dict:
         pass
 
     def flush() -> None:
-        # store dealt cards (str) in lists based on suit
-        dealt_suits = {'h':[],'c':[],'d':[],'s':[]};
-        for card in dealt_cards:
-            dealt_suits[parse_card(card)[1].lower()].append(card);
-    
-        for suit in dealt_suits: # finds the cards necessary to make a flush of this suit
-            if len(dealt_suits[suit])==4:
-                ranks = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
-                for card in dealt_suits[suit]: # remove rank from possible out-card ranks
-                    ranks.pop(parse_card(card)[0]);
-                for r in ranks:
-                    add_out(f"{ranks[r]}{suit}",5);
+        pass
 
     def straight() -> None:
-        pass
+        # for converting rank format
+        RANKS = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
+
+        # increment counter for every rank if it appears in dealt cards
+        dealt_ranks = {2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0};
+        for card in dealt_cards:
+            dealt_ranks[parse_card(card)[0]]+=1;
+
+        # check if the dealt ranks are 1 card away from a straight
+        for r in dealt_ranks:
+            if dealt_ranks[r]==0:
+                # 2 [] 2  <--- means the outcard [] is the middle card in the straight
+                if r > 3 and r < 13:
+                    if (dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+                            
+                # 3 [] 1  <--- outcard [] is 4th card in the straight
+                if r > 4 and r < 14:
+                    if (dealt_ranks[r-3]!=0 and dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # 1 [] 3
+                if r > 2 and r < 12:
+                    if (dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0 and dealt_ranks[r+3]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # 4 []
+                if r > 5:
+                    if (dealt_ranks[r-4]!=0 and dealt_ranks[r-3]!=0 and dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # [] 4
+                if r < 11:
+                    if (dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0 and dealt_ranks[r+3]!=0 and dealt_ranks[r+4]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+
+        # special case: a2345
+
+        dealt_a2345 = {14:0, 2:0, 3:0, 4:0, 5:0};
+        dealt_a2345[14] = dealt_ranks[14]; # initalizing dict for a2345 case
+        dealt_a2345[2] = dealt_ranks[2];
+        dealt_a2345[3] = dealt_ranks[3];
+        dealt_a2345[4] = dealt_ranks[4];
+        dealt_a2345[5] = dealt_ranks[5];
+
+        not_dealt = [];
+        for r in dealt_a2345:
+            if dealt_a2345[r]==0:
+                not_dealt.append(r);
+        if len(not_dealt)==1:
+            for suit in "hdsc":
+                add_out(f"{RANKS[not_dealt[0]]}{suit}",4);
 
     def three_of_a_kind() -> None:
         pass
