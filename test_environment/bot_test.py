@@ -14,6 +14,7 @@ import os
 import subprocess
 import json
 import tempfile
+import pickle
 from pathlib import Path
 from game_engine import PokerGame
 from hand_evaluator import Hand
@@ -173,6 +174,10 @@ def run_bot(bot_path: str, game_state) -> tuple[int, str]:
     Returns (action, error_message)
     """
     try:
+        # Determine memory pickle file path (based on bot file name)
+        bot_name = Path(bot_path).stem
+        memory_file = Path(bot_path).parent / f"{bot_name}_memory.pkl"
+        
         # Create a temporary file to write the game state
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             state_dict = {
@@ -190,14 +195,42 @@ def run_bot(bot_path: str, game_state) -> tuple[int, str]:
             json.dump(state_dict, f)
             state_file = f.name
         
+        # Create a temporary file for memory output
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pkl', delete=False) as f:
+            memory_output_file = f.name
+        
         # Create a wrapper script that loads the state and calls the bot
         wrapper_code = f"""
 import sys
 import json
+import pickle
 
 # Load game state
 with open('{state_file}', 'r') as f:
     state_data = json.load(f)
+
+# Load memory if it exists
+memory = None
+memory_file = '{memory_file}'
+try:
+    with open(memory_file, 'rb') as f:
+        memory = pickle.load(f)
+    
+    # Print all memory fields
+    print("=" * 60, file=sys.stderr)
+    print("BOT MEMORY STATE:", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    if hasattr(memory, '__dict__'):
+        for key, value in memory.__dict__.items():
+            print(f"  {{key}}: {{value}}", file=sys.stderr)
+    else:
+        print(f"  Memory object: {{memory}}", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+except (FileNotFoundError, EOFError):
+    print("=" * 60, file=sys.stderr)
+    print("BOT MEMORY STATE: No memory file yet", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    pass  # No memory file yet
 
 # Import the bot
 sys.path.insert(0, '{os.path.dirname(os.path.abspath(bot_path))}')
@@ -226,9 +259,14 @@ state = GameState(state_data)
 
 # Call bot function
 try:
-    result = bot_module.bet(state, None)
+    result = bot_module.bet(state, memory)
     if isinstance(result, tuple):
-        print(result[0])
+        action, new_memory = result
+        print(action)
+        # Save the new memory to output file
+        if new_memory is not None:
+            with open('{memory_output_file}', 'wb') as f:
+                pickle.dump(new_memory, f)
     else:
         print(result)
 except Exception as e:
@@ -244,8 +282,24 @@ except Exception as e:
             timeout=5
         )
         
-        # Clean up temp file
+        # Print the memory debug output (from stderr)
+        if result.stderr:
+            print(result.stderr, end='')
+        
+        # If the bot returned memory, save it to the persistent memory file
+        if os.path.exists(memory_output_file) and os.path.getsize(memory_output_file) > 0:
+            try:
+                with open(memory_output_file, 'rb') as f:
+                    new_memory = pickle.load(f)
+                with open(memory_file, 'wb') as f:
+                    pickle.dump(new_memory, f)
+            except Exception:
+                pass  # Ignore errors in memory saving
+        
+        # Clean up temp files
         os.unlink(state_file)
+        if os.path.exists(memory_output_file):
+            os.unlink(memory_output_file)
         
         if result.returncode != 0:
             return -1, f"Bot error: {result.stderr}"
