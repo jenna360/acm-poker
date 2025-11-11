@@ -417,15 +417,14 @@ class PokerGame:
     
     def get_visible_state_for_player(self, player_idx: int) -> GameState:
         """Get game state visible to a specific player"""
-        # For bot: hide opponent's cards
-        visible_cards = copy.deepcopy(self.players_cards)
-        visible_cards[1 - player_idx] = []  # Hide opponent's cards
+        # For bot: only show this player's cards (not opponent's)
+        player_cards = copy.deepcopy(self.players_cards[player_idx])
         
         return GameState(
             index_to_action=self.index_to_action,
             index_of_small_blind=self.index_of_small_blind,
             players=self.player_names.copy(),
-            players_cards=visible_cards,
+            players_cards=player_cards,  # Just this player's cards
             held_money=self.held_money.copy(),
             bet_money=self.bet_money.copy(),
             community_cards=self.community_cards.copy(),

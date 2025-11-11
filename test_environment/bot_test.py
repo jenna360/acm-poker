@@ -267,10 +267,15 @@ try:
         if new_memory is not None:
             with open('{memory_output_file}', 'wb') as f:
                 pickle.dump(new_memory, f)
+        else:
+            print(f"Bot returned None for memory", file=sys.stderr)
     else:
         print(result)
+        print(f"Bot returned non-tuple result", file=sys.stderr)
 except Exception as e:
     print(f"ERROR: {{e}}", file=sys.stderr)
+    import traceback
+    traceback.print_exc(file=sys.stderr)
     sys.exit(1)
 """
         
@@ -289,12 +294,16 @@ except Exception as e:
         # If the bot returned memory, save it to the persistent memory file
         if os.path.exists(memory_output_file) and os.path.getsize(memory_output_file) > 0:
             try:
+                # Import the bot module so pickle can deserialize the Memory class
+                sys.path.insert(0, os.path.dirname(os.path.abspath(bot_path)))
+                bot_module = __import__(Path(bot_path).stem)
+                
                 with open(memory_output_file, 'rb') as f:
                     new_memory = pickle.load(f)
                 with open(memory_file, 'wb') as f:
                     pickle.dump(new_memory, f)
-            except Exception:
-                pass  # Ignore errors in memory saving
+            except Exception as e:
+                print(f"{Colors.YELLOW}[Warning: Could not save memory: {e}]{Colors.ENDC}")
         
         # Clean up temp files
         os.unlink(state_file)
@@ -441,6 +450,16 @@ def main():
         showdown_community = None
         
         while not game.game_over:
+            # CRITICAL: Save cards BEFORE displaying state (in case showdown happened)
+            # Check if we just reached showdown (5 community cards + multiple players still in)
+            if len(game.community_cards) == 5 and not reached_showdown:
+                players_in = sum(1 for bet in game.bet_money if bet != -1)
+                if players_in > 1:
+                    # Save cards now before they get cleared
+                    showdown_cards = [cards.copy() for cards in game.players_cards]
+                    showdown_community = game.community_cards.copy()
+                    reached_showdown = True
+            
             # Show game state
             display_game_state(game, player_idx)
             
@@ -459,6 +478,21 @@ def main():
                 # Human player's turn
                 action = get_player_action(game, player_idx)
                 
+                # Save state before applying action (game engine may start new hand)
+                old_bet_money = game.bet_money.copy()
+                old_pot = game.pots[0].value if game.pots else 0
+                
+                # Check if this action will trigger showdown (river + action completes round)
+                will_trigger_showdown = False
+                if action >= 0 and len(game.community_cards) == 5:  # Not a fold and on river
+                    players_in = sum(1 for bet in game.bet_money if bet != -1)
+                    if players_in > 1:
+                        # This action will complete the betting round, save cards NOW
+                        will_trigger_showdown = True
+                        reached_showdown = True
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                        showdown_community = game.community_cards.copy()
+                
                 # Check for potential all-in showdown BEFORE applying action
                 will_trigger_allin_showdown = False
                 if action >= 0:  # Not a fold
@@ -469,22 +503,42 @@ def main():
                     
                     if bot_allin or you_going_allin:
                         will_trigger_allin_showdown = True
-                        # Save cards before action
-                        showdown_cards = [cards.copy() for cards in game.players_cards]
                 
                 result = game.apply_action(action)
                 print(f"\n{Colors.CYAN}→ {result}{Colors.ENDC}")
                 
-                # If all-in showdown happened, save the community cards that were dealt
-                if will_trigger_allin_showdown and game.game_over and len(game.community_cards) == 5:
-                    reached_showdown = True
-                    showdown_community = game.community_cards.copy()
+                # If all-in showdown was triggered, cards should now be dealt
+                # Save them immediately before they potentially get cleared
+                if will_trigger_allin_showdown and len(game.community_cards) == 5:
+                    players_in = sum(1 for bet in game.bet_money if bet != -1)
+                    if players_in > 1:
+                        reached_showdown = True
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                        showdown_community = game.community_cards.copy()
                 
-                # Don't break here - let the loop continue to show the next state
-                # The hand will naturally end when someone folds or showdown completes
+                # Check if hand ended (someone folded)
+                # Player folded if action was -1, OR check if bot folded before action
+                player_folded = (action == -1)
+                bot_folded = (old_bet_money[bot_idx] == -1)
+                hand_over = player_folded or bot_folded
                 
-                # Prompt to continue after player action
-                input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
+                if hand_over:
+                    # Someone folded, hand is over - show who won
+                    print(f"\n{Colors.BOLD}{Colors.YELLOW}━━━ Hand Over ━━━{Colors.ENDC}")
+                    if player_folded:
+                        print(f"{Colors.RED}You folded. Bot wins the pot of {old_pot} chips!{Colors.ENDC}")
+                    else:
+                        print(f"{Colors.GREEN}Bot folded. You win the pot of {old_pot} chips!{Colors.ENDC}")
+                    # Break to end the hand (will prompt before next hand)
+                    break
+                
+                # If we just triggered a showdown, break out to display it
+                if will_trigger_showdown or (will_trigger_allin_showdown and reached_showdown):
+                    break
+                
+                # Prompt to continue after player action (only if hand isn't over and game isn't over)
+                if not game.game_over and not hand_over:
+                    input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
             else:
                 # Bot's turn
                 print(f"\n{Colors.BOLD}🤖 Bot is thinking...{Colors.ENDC}")
@@ -511,6 +565,21 @@ def main():
                     
                     print(f"{Colors.BOLD}{Colors.YELLOW}Bot action: {action_str}{Colors.ENDC}")
                 
+                # Save state before applying action (game engine may start new hand)
+                old_bet_money = game.bet_money.copy()
+                old_pot = game.pots[0].value if game.pots else 0
+                
+                # Check if this action will trigger showdown (river + action completes round)
+                will_trigger_showdown = False
+                if action >= 0 and len(game.community_cards) == 5:  # Not a fold and on river
+                    players_in = sum(1 for bet in game.bet_money if bet != -1)
+                    if players_in > 1:
+                        # This action will complete the betting round, save cards NOW
+                        will_trigger_showdown = True
+                        reached_showdown = True
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                        showdown_community = game.community_cards.copy()
+                
                 # Check for potential all-in showdown BEFORE applying action
                 # If someone is all-in and opponent calls, we'll go to showdown
                 will_trigger_allin_showdown = False
@@ -522,37 +591,41 @@ def main():
                     
                     if player_allin or bot_going_allin:
                         will_trigger_allin_showdown = True
-                        # Save cards before action (they'll be available after showdown too)
-                        showdown_cards = [cards.copy() for cards in game.players_cards]
-                
-                # Check for potential showdown BEFORE applying action
-                if len(game.community_cards) == 5:
-                    players_in = sum(1 for bet in game.bet_money if bet != -1)
-                    # If this action will complete the round, we're going to showdown
-                    if players_in > 1 and game.actions_this_round >= 1:
-                        reached_showdown = True
-                        showdown_cards = [cards.copy() for cards in game.players_cards]
-                        showdown_community = game.community_cards.copy()
                 
                 result = game.apply_action(action)
                 print(f"{Colors.CYAN}→ {result}{Colors.ENDC}")
                 
-                # If all-in showdown happened, save the community cards that were dealt
-                if will_trigger_allin_showdown and game.game_over and len(game.community_cards) == 5:
-                    reached_showdown = True
-                    showdown_community = game.community_cards.copy()
+                # If all-in showdown was triggered, cards should now be dealt
+                # Save them immediately before they potentially get cleared
+                if will_trigger_allin_showdown and len(game.community_cards) == 5:
+                    players_in = sum(1 for bet in game.bet_money if bet != -1)
+                    if players_in > 1:
+                        reached_showdown = True
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                        showdown_community = game.community_cards.copy()
                 
-                # Check if hand is over after bot action (before prompting)
-                hand_over = game.game_over or len(game.community_cards) == 0
+                # Check if hand is over after bot action
+                # Bot folded if action was -1, OR check if player folded before action
+                bot_folded = (action == -1)
+                player_folded = (old_bet_money[player_idx] == -1)
+                hand_over = bot_folded or player_folded
+                
+                # Show winner if hand just ended by fold
+                if hand_over:
+                    print(f"\n{Colors.BOLD}{Colors.YELLOW}━━━ Hand Over ━━━{Colors.ENDC}")
+                    if player_folded:
+                        print(f"{Colors.RED}You folded. Bot wins the pot of {old_pot} chips!{Colors.ENDC}")
+                    else:
+                        print(f"{Colors.GREEN}Bot folded. You win the pot of {old_pot} chips!{Colors.ENDC}")
                 
                 # Prompt after bot action so user can see what happened
                 # (but not if hand just ended - we'll prompt before next hand instead)
-                if not game.game_over and not hand_over:
+                if not game.game_over and not hand_over and not (will_trigger_showdown or (will_trigger_allin_showdown and reached_showdown)):
                     input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
                 
-                # If hand is over, handle showdown and break
-                if hand_over:
-                    # Show showdown if we have the cards saved (including all-in showdowns)
+                # If hand is over or showdown triggered, handle showdown and break
+                if hand_over or game.game_over or will_trigger_showdown or (will_trigger_allin_showdown and reached_showdown):
+                    # Show showdown if we have the cards saved (all-in showdown or both players stayed in)
                     if reached_showdown and showdown_cards and showdown_community:
                         show_showdown_with_cards(showdown_cards, showdown_community, player_idx)
                     break
