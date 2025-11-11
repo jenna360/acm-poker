@@ -404,8 +404,27 @@ def main():
             if current_player_idx == player_idx:
                 # Human player's turn
                 action = get_player_action(game, player_idx)
+                
+                # Check for potential all-in showdown BEFORE applying action
+                will_trigger_allin_showdown = False
+                if action >= 0:  # Not a fold
+                    # Check if bot is already all-in
+                    bot_allin = game.held_money[bot_idx] == 0 and game.bet_money[bot_idx] != -1
+                    # Check if this action will make you all-in
+                    you_going_allin = (action == game.held_money[player_idx])
+                    
+                    if bot_allin or you_going_allin:
+                        will_trigger_allin_showdown = True
+                        # Save cards before action
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                
                 result = game.apply_action(action)
                 print(f"\n{Colors.CYAN}→ {result}{Colors.ENDC}")
+                
+                # If all-in showdown happened, save the community cards that were dealt
+                if will_trigger_allin_showdown and game.game_over and len(game.community_cards) == 5:
+                    reached_showdown = True
+                    showdown_community = game.community_cards.copy()
                 
                 # Don't break here - let the loop continue to show the next state
                 # The hand will naturally end when someone folds or showdown completes
@@ -438,6 +457,20 @@ def main():
                     
                     print(f"{Colors.BOLD}{Colors.YELLOW}Bot action: {action_str}{Colors.ENDC}")
                 
+                # Check for potential all-in showdown BEFORE applying action
+                # If someone is all-in and opponent calls, we'll go to showdown
+                will_trigger_allin_showdown = False
+                if action >= 0:  # Not a fold
+                    # Check if either player is already all-in
+                    player_allin = any(game.held_money[i] == 0 and game.bet_money[i] != -1 for i in range(2))
+                    # Check if this action will make bot all-in
+                    bot_going_allin = (action == game.held_money[bot_idx])
+                    
+                    if player_allin or bot_going_allin:
+                        will_trigger_allin_showdown = True
+                        # Save cards before action (they'll be available after showdown too)
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                
                 # Check for potential showdown BEFORE applying action
                 if len(game.community_cards) == 5:
                     players_in = sum(1 for bet in game.bet_money if bet != -1)
@@ -450,6 +483,11 @@ def main():
                 result = game.apply_action(action)
                 print(f"{Colors.CYAN}→ {result}{Colors.ENDC}")
                 
+                # If all-in showdown happened, save the community cards that were dealt
+                if will_trigger_allin_showdown and game.game_over and len(game.community_cards) == 5:
+                    reached_showdown = True
+                    showdown_community = game.community_cards.copy()
+                
                 # Check if hand is over after bot action (before prompting)
                 hand_over = game.game_over or len(game.community_cards) == 0
                 
@@ -460,7 +498,8 @@ def main():
                 
                 # If hand is over, handle showdown and break
                 if hand_over:
-                    if reached_showdown and not game.game_over and showdown_cards:
+                    # Show showdown if we have the cards saved (including all-in showdowns)
+                    if reached_showdown and showdown_cards and showdown_community:
                         show_showdown_with_cards(showdown_cards, showdown_community, player_idx)
                     break
         

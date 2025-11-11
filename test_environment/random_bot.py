@@ -56,11 +56,16 @@ def bet(state: GameState, memory: Optional[Memory] = None) -> Tuple[int, Optiona
         # Preflop: just call
         return (call_amount, memory)
     
-    # Postflop: randomly choose to fold, check/call, or bet/raise
+    # Postflop: randomly choose to fold, check/call, bet/raise, or all-in
     actions = [-1, call_amount]
     
     # Only allow betting if player has enough money
     if my_chips > state.big_blind:
+        # Add a random bet option
         actions.append(random.randint(state.big_blind, my_chips))
+        # Add all-in option
+        actions.append(my_chips)
     
     return (random.choice(actions), memory)
+    # return (-1, memory)
+    # return (state.held_money[state.index_to_action], memory)

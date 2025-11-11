@@ -217,6 +217,12 @@ class PokerGame:
         
         if len(players_in) == 1:
             winner_idx = players_in[0]
+            
+            # Move all bets to pot first (so winner gets everything)
+            for i, bet in enumerate(self.bet_money):
+                if bet > 0:
+                    self.pots[0].value += bet
+            
             # Award all pot money
             for pot in self.pots:
                 self.held_money[winner_idx] += pot.value
@@ -240,9 +246,10 @@ class PokerGame:
         """Check if the current betting round is complete"""
         # Need at least 2 actions for heads-up (both players must act)
         # Exception: if someone folded or went all-in on first action
-        active_players = sum(1 for i, bet in enumerate(self.bet_money) if bet != -1 and self.held_money[i] > 0)
+        # Active players are those who haven't folded (bet != -1)
+        active_players = sum(1 for i, bet in enumerate(self.bet_money) if bet != -1)
         
-        # If only 1 or 0 active players remain, round is complete
+        # If only 1 or 0 active players remain (other folded), round is complete
         if active_players <= 1:
             return True
         
@@ -347,7 +354,8 @@ class PokerGame:
     
     def showdown(self):
         """Evaluate hands and award pot"""
-        players_in_pot = [i for i, bet in enumerate(self.bet_money) if bet != -1]
+        # Use pot.players to determine who's in (bet_money may already be reset)
+        players_in_pot = [i for i, name in enumerate(self.player_names) if name in self.pots[0].players]
         
         if len(players_in_pot) == 0:
             # Shouldn't happen
@@ -358,6 +366,7 @@ class PokerGame:
             winner_idx = players_in_pot[0]
             for pot in self.pots:
                 self.held_money[winner_idx] += pot.value
+                pot.value = 0  # Reset pot after awarding
         else:
             # Compare hands
             hands = []
@@ -391,6 +400,9 @@ class PokerGame:
                 else:
                     # SB not in winners, give to first winner
                     self.held_money[winners[0][1]] += remainder
+            
+            # Reset pot after awarding
+            self.pots[0].value = 0
         
         # Check for game over
         for i in range(2):
