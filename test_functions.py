@@ -1,4 +1,6 @@
-
+out_cards={}
+hole_cards=['2h','3c']
+com_cards=['3s','4d', '5s','kh']
 
 # GIVEN FUNCTION: parse card string into (rank:int, suit:str)
 def parse_card(card: str) -> tuple[int, str]:
@@ -19,7 +21,7 @@ def calculate_outs() -> dict:
     out_cards = {} # key = out card (string), value = rank of hand type the card is for (int)
     # examples of keys (for consistency): '3h','js','6d'
 
-    # NOT INCLUDED FOR TEST (directly passed in)
+    # NOT NEEDED FOR TEST (passed in directly)
     # hole_cards = state.player_cards;
     # com_cards = state.community_cards;
     
@@ -46,20 +48,25 @@ def calculate_outs() -> dict:
         if card:
             dealt_cards.add(card)
 
+    # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
+    dealt_ranks = []
+    for card in dealt_cards:
+        dealt_ranks.append(parse_card(card)[0])
+
+    from collections import Counter
+    # count each instance of seen ranks
+    cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
+    num_pairs = 0
+    num_trips = 0
+    for rank_val, count in cnt.items():
+        if count == 2: num_pairs+=1
+        if count == 3: num_trips+=1
+
 
     # hand type functions:
 
     def four_of_a_kind() -> None:
 
-        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
-        dealt_ranks = []
-        for card in dealt_cards:
-            dealt_ranks.append(parse_card(card)[0])
-
-        
-        from collections import Counter
-        # count each instance of seen ranks
-        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
 
         # in case rank is 10-13, make dict to convert letter represenation later
         face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
@@ -72,16 +79,115 @@ def calculate_outs() -> dict:
                     else: # not a face card
                         card_to_add = f"{rank_val}{suit}"
                     if card_to_add not in dealt_cards:
-                        add_out(card_to_add, 3)
+                        add_out(card_to_add, 7)
 
     def full_house() -> None:
-        pass
+
+        # if there already exists two pairs
+        if num_pairs == 2:
+            # in case rank is 10-13, make dict to convert letter represenation later
+            face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+            for rank_val, count in cnt.items():
+                if count == 2:
+                    for suit in "hdsc":
+                        if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                            card_to_add = f"{face_card[rank_val]}{suit}"
+                        else: # not a face card
+                            card_to_add = f"{rank_val}{suit}"
+                        if card_to_add not in dealt_cards:
+                            add_out(card_to_add, 6)
+
+        if num_trips >= 1 and num_pairs == 0:
+            # in case rank is 10-13, make dict to convert letter represenation later
+            face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+            for rank_val, count in cnt.items():
+                if count == 1:
+                    for suit in "hdsc":
+                        if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                            card_to_add = f"{face_card[rank_val]}{suit}"
+                        else: # not a face card
+                            card_to_add = f"{rank_val}{suit}"
+                        if card_to_add not in dealt_cards:
+                            add_out(card_to_add, 6)
 
     def flush() -> None:
-        pass
+        # store dealt cards (str) in lists based on suit
+        dealt_suits = {'h':[],'c':[],'d':[],'s':[]};
+        for card in dealt_cards:
+            dealt_suits[parse_card(card)[1].lower()].append(card);
+    
+        for suit in dealt_suits: # finds the cards necessary to make a flush of this suit
+            if len(dealt_suits[suit])==4:
+                ranks = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
+                for card in dealt_suits[suit]: # remove rank from possible out-card ranks
+                    ranks.pop(parse_card(card)[0]);
+                for r in ranks:
+                    add_out(f"{ranks[r]}{suit}",5);
+    
 
     def straight() -> None:
-        pass
+        # for converting rank format
+        RANKS = {2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:'t', 11:'j', 12:'q', 13:'k', 14:'a'};
+
+        # increment counter for every rank if it appears in dealt cards
+        dealt_ranks = {2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0};
+        for card in dealt_cards:
+            dealt_ranks[parse_card(card)[0]]+=1;
+
+        # check if the dealt ranks are 1 card away from a straight
+        for r in dealt_ranks:
+            if dealt_ranks[r]==0:
+                # 2 [] 2  <--- means the outcard [] is the middle card in the straight
+                if r > 3 and r < 13:
+                    if (dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+                            
+                # 3 [] 1  <--- outcard [] is 4th card in the straight
+                if r > 4 and r < 14:
+                    if (dealt_ranks[r-3]!=0 and dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # 1 [] 3
+                if r > 2 and r < 12:
+                    if (dealt_ranks[r-1]!=0 and dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0 and dealt_ranks[r+3]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # 4 []
+                if r > 5:
+                    if (dealt_ranks[r-4]!=0 and dealt_ranks[r-3]!=0 and dealt_ranks[r-2]!=0 and dealt_ranks[r-1]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+                # [] 4
+                if r < 11:
+                    if (dealt_ranks[r+1]!=0 and dealt_ranks[r+2]!=0 and dealt_ranks[r+3]!=0 and dealt_ranks[r+4]!=0):
+                        for suit in "hdsc":
+                            add_out(f"{RANKS[r]}{suit}",4);
+
+
+        # special case: a2345
+
+        dealt_a2345 = {14:0, 2:0, 3:0, 4:0, 5:0};
+        dealt_a2345[14] = dealt_ranks[14]; # initalizing dict for a2345 case
+        dealt_a2345[2] = dealt_ranks[2];
+        dealt_a2345[3] = dealt_ranks[3];
+        dealt_a2345[4] = dealt_ranks[4];
+        dealt_a2345[5] = dealt_ranks[5];
+
+        not_dealt = [];
+        for r in dealt_a2345:
+            if dealt_a2345[r]==0:
+                not_dealt.append(r);
+        if len(not_dealt)==1: # check if dealt cards are 1 card away from a2345 straight
+            for suit in "hdsc":
+                add_out(f"{RANKS[not_dealt[0]]}{suit}",4);
+
+
 
     def three_of_a_kind() -> None:
 
@@ -89,11 +195,6 @@ def calculate_outs() -> dict:
         dealt_ranks = []
         for card in dealt_cards:
             dealt_ranks.append(parse_card(card)[0])
-
-        
-        from collections import Counter
-        # count each instance of seen ranks
-        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
 
         # in case rank is 10-13, make dict to convert letter represenation later
         face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
@@ -110,14 +211,26 @@ def calculate_outs() -> dict:
 
 
     def two_pair() -> None:
-        pass
+
+        # if there already exists one pair
+        if num_pairs == 1:
+            # in case rank is 10-13, make dict to convert letter represenation later
+            face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
+
+            for rank_val, count in cnt.items():
+                if count == 1:
+                    for suit in "hdsc":
+                        if (rank_val in face_card): # if face card, change its rank to the name (eg 11 -> 'J')
+                            card_to_add = f"{face_card[rank_val]}{suit}"
+                        else: # not a face card
+                            card_to_add = f"{rank_val}{suit}"
+                        if card_to_add not in dealt_cards:
+                            add_out(card_to_add, 2)
 
     def high_pair() -> None:
-
-        # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
-        dealt_ranks = []
-        for card in dealt_cards:
-            dealt_ranks.append(parse_card(card)[0])
+        # if already exists, pair, exit
+        if num_pairs != 0:
+            return
 
         
         from collections import Counter
@@ -138,16 +251,15 @@ def calculate_outs() -> dict:
                         add_out(card_to_add, 1)
 
     def low_pair() -> None:
+        # if already exists, pair, exit
+        if num_pairs != 0:
+            return
 
         # store all seen ranks in dealt_ranks (eg [4, 11, 14, 4])
         dealt_ranks = []
         for card in dealt_cards:
             dealt_ranks.append(parse_card(card)[0])
 
-        
-        from collections import Counter
-        # count each instance of seen ranks
-        cnt = Counter(dealt_ranks) # example cnt = {4: 2, 11: 1, 14 : 1}
 
         # in case rank is 10-13, make dict to convert letter represenation later
         face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
@@ -175,107 +287,3 @@ def calculate_outs() -> dict:
     low_pair();
 
     return out_cards;
-# ---------------- TEST HARNESS (paste below your code) ----------------
-
-def run_test(hole, com):
-    """
-    hole, com: dict[str, int] - your globals (card -> any int)
-    must_include: dict[str, int] - outs that MUST be present with exact worth
-    must_not_include: set[str] - outs that MUST NOT appear
-    """
-    # use globals exactly like your code expects
-    global hole_cards, com_cards
-    hole_cards = hole.copy()
-    com_cards  = com.copy()
-
-    outs = calculate_outs()
-
-    print(f"\n{name}")
-    print("hole_cards:", hole_cards)
-    print("com_cards :", com_cards)
-    print("outs      :", outs)
-
-    # basic sanity checks
-    # 1) out keys should be 2-char lowercase like 'kh', '7c'
-    for k in outs:
-        assert isinstance(k, str) and len(k) == 2 and k == k.lower(), f"Out key not lowercase 2-char: {k}"
-
-    # 2) outs must not include cards already dealt
-    dealt = set(hole_cards) | set(com_cards)
-    for k in outs:
-        assert k not in dealt, f"Out contains already-dealt card: {k}"
-
-    # 3) required outs
-    if must_include:
-        for k, v in must_include.items():
-            assert k in outs, f"Missing required out: {k}"
-            assert outs[k] == v, f"Wrong worth for {k}: got {outs[k]}, expected {v}"
-
-    # 4) forbidden outs
-    if must_not_include:
-        for k in must_not_include:
-            assert k not in outs, f"Unexpected out present: {k}"
-
-    print("✓ Passed")
-
-# ---------------- Example tests ----------------
-
-# T1: Four-of-a-kind out from trips of kings (need 'kc'; worth should be 3 per your code)
-run_test(
-    "T1: Trips K → quad out",
-    hole={"kd": 1, "jd": 1},
-    com={"kh": 1, "ks": 1, "6d": 1},
-    must_include={"kc": 3}
-)
-
-# T2: Already quads (no outs)
-run_test(
-    "T2: Already quads → no outs",
-    hole={"7c": 1, "2d": 1},
-    com={"7h": 1, "7d": 1, "7s": 1},
-    must_not_include={"7h", "7d", "7s", "7c"}  # and generally outs should be empty
-)
-
-# T3: Three-of-a-kind outs from a pair of 9s (two missing suits)
-# Pair = 9h, 9d; missing suits: 9s, 9c → both should be worth 3 (your three_of_a_kind uses 3)
-run_test(
-    "T3: Pair of 9s → trips outs",
-    hole={"9h": 1, "2d": 1},
-    com={"9d": 1, "qs": 1, "5c": 1},
-    must_include={"9s": 3, "9c": 3}
-)
-
-# T4: High-pair outs from a single Ace (rank > 8) → propose remaining suits (worth 1)
-# Only one Ace on table (ah). Expect ac, ad, as as outs with worth 1.
-run_test(
-    "T4: High pair from single Ace",
-    hole={"ah": 1, "2c": 1},
-    com={"kd": 1, "7s": 1, "4d": 1},
-    must_include={"ac": 1, "ad": 1, "as": 1}
-)
-
-# T5: Low-pair outs from a single 5 (rank <= 8) → propose remaining suits (worth 0.5)
-# Only one 5 on table (5h). Expect 5c, 5d, 5s as outs with worth 0.5.
-run_test(
-    "T5: Low pair from single 5",
-    hole={"5h": 1, "tc": 1},
-    com={"qd": 1, "7s": 1, "4d": 1},
-    must_include={"5c": 0.5, "5d": 0.5, "5s": 0.5}
-)
-
-# T6: Face-rank mapping check for tens/jacks/queens/kings/aces (lowercase letters)
-# Pair of tens → missing suits should be 'ts' and 'tc' (worth 3)
-run_test(
-    "T6: Face mapping for 't'",
-    hole={"th": 1, "2d": 1},
-    com={"td": 1, "9s": 1, "3c": 1},
-    must_include={"ts": 3, "tc": 3}
-)
-
-# T7: No pairs/trips of any rank → three_of_a_kind/four_of_a_kind produce no outs
-# (high_pair/low_pair will still add many proposals; here we *forbid* one that shouldn't appear)
-run_test(
-    "T7: No pairs or trips",
-    hole={"ah": 1, "kd": 1},
-    com={"9s": 1, "7c": 1, "3d": 1},
-    must_not_include={"ac"} 
