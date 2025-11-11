@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""
+CLI for testing your poker bot by playing against it heads-up.
+
+Usage:
+    python bot_test.py <path_to_bot.py>
+
+Example:
+    python bot_test.py random_bot.py
+"""
+
+import sys
+import os
+import subprocess
+import json
+import tempfile
+from pathlib import Path
+from game_engine import PokerGame
+from hand_evaluator import Hand
+
+# ANSI color codes for pretty printing
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+def format_card(card: str) -> str:
+    """Format a card with color based on suit"""
+    if len(card) < 2:
+        return card
+    
+    rank, suit = card[0].upper(), card[1].lower()
+    
+    # Red suits
+    if suit in ['h', 'd']:
+        return f"{Colors.RED}{rank}{suit.upper()}{Colors.ENDC}"
+    # Black suits
+    else:
+        return f"{rank}{suit.upper()}"
+
+
+def display_game_state(game: PokerGame, player_idx: int):
+    """Display the current game state"""
+    bot_idx = 1 - player_idx
+    
+    print("\n" + "="*60)
+    print(f"{Colors.BOLD}{Colors.HEADER}POKER TABLE{Colors.ENDC}")
+    print("="*60)
+    
+    # Pot information
+    total_pot = sum(pot.value for pot in game.pots)
+    print(f"{Colors.YELLOW}💰 Pot: {total_pot} chips{Colors.ENDC}")
+    
+    # Community cards
+    if game.community_cards:
+        cards_str = " ".join([format_card(c) for c in game.community_cards])
+        print(f"{Colors.CYAN}Community Cards: {cards_str}{Colors.ENDC}")
+    else:
+        print(f"{Colors.CYAN}Community Cards: [Preflop]{Colors.ENDC}")
+    
+    print()
+    
+    # Bot info
+    bot_bet = game.bet_money[bot_idx]
+    bot_status = ""
+    if bot_bet == -1:
+        bot_status = f"{Colors.RED}[FOLDED]{Colors.ENDC}"
+    elif game.held_money[bot_idx] == 0:
+        bot_status = f"{Colors.YELLOW}[ALL-IN]{Colors.ENDC}"
+    
+    print(f"{Colors.BOLD}🤖 {game.player_names[bot_idx]}{Colors.ENDC} {bot_status}")
+    print(f"   Chips: {game.held_money[bot_idx]}")
+    
+    # Always show bot cards
+    if game.players_cards[bot_idx]:
+        cards_str = " ".join([format_card(c) for c in game.players_cards[bot_idx]])
+        print(f"   Cards: {cards_str}")
+    
+    if bot_bet > 0:
+        print(f"   Current Bet: {Colors.YELLOW}{bot_bet}{Colors.ENDC}")
+    elif bot_bet == 0:
+        print(f"   Current Bet: 0 (checked)")
+    
+    print()
+    
+    # Player info
+    player_bet = game.bet_money[player_idx]
+    player_status = ""
+    if player_bet == -1:
+        player_status = f"{Colors.RED}[FOLDED]{Colors.ENDC}"
+    elif game.held_money[player_idx] == 0:
+        player_status = f"{Colors.YELLOW}[ALL-IN]{Colors.ENDC}"
+    
+    print(f"{Colors.BOLD}👤 {game.player_names[player_idx]}{Colors.ENDC} {player_status}")
+    print(f"   Chips: {game.held_money[player_idx]}")
+    
+    if game.players_cards[player_idx]:
+        cards_str = " ".join([format_card(c) for c in game.players_cards[player_idx]])
+        print(f"   Cards: {Colors.GREEN}{cards_str}{Colors.ENDC}")
+    
+    if player_bet > 0:
+        print(f"   Current Bet: {Colors.YELLOW}{player_bet}{Colors.ENDC}")
+    elif player_bet == 0:
+        print(f"   Current Bet: 0 (checked)")
+    
+    print()
+    
+    # Blind information
+    if game.index_of_small_blind == player_idx:
+        print(f"   🎯 You have the button (Small Blind)")
+    else:
+        print(f"   🎯 Bot has the button (Small Blind)")
+    
+    print("="*60)
+
+
+def get_player_action(game: PokerGame, player_idx: int) -> int:
+    """Get and validate player's action - only returns valid actions"""
+    call_amount = game.get_call_amount()
+    min_raise = game.get_min_raise()
+    chips = game.held_money[player_idx]
+    current_bet = game.bet_money[player_idx]
+    
+    print(f"\n{Colors.BOLD}{Colors.GREEN}Your turn!{Colors.ENDC}")
+    print(f"Current bet to you: {game.get_max_bet()} (you've bet {current_bet})")
+    print(f"Amount to call: {call_amount}")
+    print(f"Your chips: {chips}")
+    
+    if call_amount > 0:
+        print(f"\nOptions:")
+        print(f"  -1 = Fold")
+        print(f"  {call_amount} = Call")
+        if chips > min_raise - current_bet:
+            print(f"  {min_raise - current_bet} or more = Raise (min total bet: {min_raise})")
+        print(f"  {chips} = All-in")
+    else:
+        print(f"\nOptions:")
+        print(f"  0 = Check")
+        print(f"  -1 = Fold")
+        if chips >= min_raise - current_bet:
+            print(f"  {min_raise - current_bet} or more = Bet/Raise (min total bet: {min_raise})")
+        print(f"  {chips} = All-in")
+    
+    while True:
+        try:
+            action_input = input(f"\n{Colors.BOLD}Enter your action: {Colors.ENDC}").strip()
+            action = int(action_input)
+            
+            is_valid, message = game.is_valid_action(action)
+            if is_valid:
+                print(f"{Colors.GREEN}✓ {message}{Colors.ENDC}")
+                return action
+            else:
+                print(f"{Colors.RED}✗ Invalid: {message}{Colors.ENDC}")
+                print(f"{Colors.YELLOW}Please enter a valid action.{Colors.ENDC}")
+        except ValueError:
+            print(f"{Colors.RED}Invalid input. Please enter an integer.{Colors.ENDC}")
+        except KeyboardInterrupt:
+            print(f"\n{Colors.YELLOW}Game interrupted. Exiting...{Colors.ENDC}")
+            sys.exit(0)
+
+
+def run_bot(bot_path: str, game_state) -> tuple[int, str]:
+    """
+    Run the bot code and get its action.
+    Returns (action, error_message)
+    """
+    try:
+        # Create a temporary file to write the game state
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            state_dict = {
+                'index_to_action': game_state.index_to_action,
+                'index_of_small_blind': game_state.index_of_small_blind,
+                'players': game_state.players,
+                'player_cards': game_state.player_cards,
+                'held_money': game_state.held_money,
+                'bet_money': game_state.bet_money,
+                'community_cards': game_state.community_cards,
+                'pots': [{'value': p.value, 'players': p.players} for p in game_state.pots],
+                'small_blind': game_state.small_blind,
+                'big_blind': game_state.big_blind,
+            }
+            json.dump(state_dict, f)
+            state_file = f.name
+        
+        # Create a wrapper script that loads the state and calls the bot
+        wrapper_code = f"""
+import sys
+import json
+
+# Load game state
+with open('{state_file}', 'r') as f:
+    state_data = json.load(f)
+
+# Import the bot
+sys.path.insert(0, '{os.path.dirname(os.path.abspath(bot_path))}')
+bot_module = __import__('{Path(bot_path).stem}')
+
+# Create state object
+class Pot:
+    def __init__(self, value, players):
+        self.value = value
+        self.players = players
+
+class GameState:
+    def __init__(self, data):
+        self.index_to_action = data['index_to_action']
+        self.index_of_small_blind = data['index_of_small_blind']
+        self.players = data['players']
+        self.player_cards = data['player_cards']
+        self.held_money = data['held_money']
+        self.bet_money = data['bet_money']
+        self.community_cards = data['community_cards']
+        self.pots = [Pot(p['value'], p['players']) for p in data['pots']]
+        self.small_blind = data['small_blind']
+        self.big_blind = data['big_blind']
+
+state = GameState(state_data)
+
+# Call bot function
+try:
+    result = bot_module.bet(state, None)
+    if isinstance(result, tuple):
+        print(result[0])
+    else:
+        print(result)
+except Exception as e:
+    print(f"ERROR: {{e}}", file=sys.stderr)
+    sys.exit(1)
+"""
+        
+        # Run the wrapper
+        result = subprocess.run(
+            [sys.executable, '-c', wrapper_code],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        # Clean up temp file
+        os.unlink(state_file)
+        
+        if result.returncode != 0:
+            return -1, f"Bot error: {result.stderr}"
+        
+        try:
+            action = int(result.stdout.strip())
+            return action, ""
+        except ValueError:
+            return -1, f"Bot returned invalid output: {result.stdout}"
+        
+    except subprocess.TimeoutExpired:
+        return -1, "Bot timed out (5 second limit)"
+    except Exception as e:
+        return -1, f"Error running bot: {str(e)}"
+
+
+def show_showdown_with_cards(players_cards: list[list[str]], community_cards: list[str], player_idx: int):
+    """Display showdown results with saved cards"""
+    bot_idx = 1 - player_idx
+    
+    # Safety check - ensure we have cards to show
+    if not players_cards[player_idx] or not players_cards[bot_idx] or not community_cards:
+        return
+    
+    # Ensure we have enough cards for a valid hand (5+ cards total)
+    if len(community_cards) + len(players_cards[player_idx]) < 5:
+        return
+    if len(community_cards) + len(players_cards[bot_idx]) < 5:
+        return
+    
+    print(f"\n{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}SHOWDOWN!{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}\n")
+    
+    # Show community cards
+    cards_str = " ".join([format_card(c) for c in community_cards])
+    print(f"{Colors.CYAN}Board: {cards_str}{Colors.ENDC}\n")
+    
+    # Show both hands
+    player_cards_str = " ".join([format_card(c) for c in players_cards[player_idx]])
+    player_hand = Hand(community_cards + players_cards[player_idx])
+    print(f"{Colors.BOLD}👤 Your hand:{Colors.ENDC}")
+    print(f"   Cards: {Colors.GREEN}{player_cards_str}{Colors.ENDC}")
+    print(f"   Hand: {Colors.GREEN}{player_hand.get_hand_name()}{Colors.ENDC}")
+    print(f"   Best 5: {' '.join([format_card(str(c)) for c in player_hand.cards])}\n")
+    
+    bot_cards_str = " ".join([format_card(c) for c in players_cards[bot_idx]])
+    bot_hand = Hand(community_cards + players_cards[bot_idx])
+    print(f"{Colors.BOLD}🤖 Bot's hand:{Colors.ENDC}")
+    print(f"   Cards: {bot_cards_str}")
+    print(f"   Hand: {bot_hand.get_hand_name()}")
+    print(f"   Best 5: {' '.join([format_card(str(c)) for c in bot_hand.cards])}\n")
+    
+    # Determine winner
+    if player_hand > bot_hand:
+        print(f"{Colors.GREEN}{Colors.BOLD}🎉 YOU WIN THE HAND! 🎉{Colors.ENDC}")
+    elif bot_hand > player_hand:
+        print(f"{Colors.RED}{Colors.BOLD}😞 Bot wins the hand{Colors.ENDC}")
+    else:
+        print(f"{Colors.YELLOW}{Colors.BOLD}🤝 Split pot!{Colors.ENDC}")
+    
+    print(f"\n{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
+    input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(f"Usage: python {sys.argv[0]} <path_to_bot.py> [--stack CHIPS] [--sb SB] [--bb BB]")
+        print(f"Example: python {sys.argv[0]} random_bot.py")
+        print(f"Example: python {sys.argv[0]} random_bot.py --stack 10000 --sb 100 --bb 200")
+        sys.exit(1)
+    
+    bot_path = sys.argv[1]
+    
+    # Parse optional arguments for stack and blinds
+    starting_stack = 7500  # Default
+    small_blind = 50       # Default
+    big_blind = 100        # Default
+    
+    i = 2
+    while i < len(sys.argv):
+        if sys.argv[i] == '--stack' and i + 1 < len(sys.argv):
+            try:
+                starting_stack = int(sys.argv[i + 1])
+                i += 2
+            except ValueError:
+                print(f"{Colors.RED}Error: Invalid stack value{Colors.ENDC}")
+                sys.exit(1)
+        elif sys.argv[i] == '--sb' and i + 1 < len(sys.argv):
+            try:
+                small_blind = int(sys.argv[i + 1])
+                i += 2
+            except ValueError:
+                print(f"{Colors.RED}Error: Invalid small blind value{Colors.ENDC}")
+                sys.exit(1)
+        elif sys.argv[i] == '--bb' and i + 1 < len(sys.argv):
+            try:
+                big_blind = int(sys.argv[i + 1])
+                i += 2
+            except ValueError:
+                print(f"{Colors.RED}Error: Invalid big blind value{Colors.ENDC}")
+                sys.exit(1)
+        else:
+            print(f"{Colors.RED}Error: Unknown argument {sys.argv[i]}{Colors.ENDC}")
+            sys.exit(1)
+    
+    if not os.path.exists(bot_path):
+        print(f"{Colors.RED}Error: Bot file not found: {bot_path}{Colors.ENDC}")
+        sys.exit(1)
+    
+    print(f"\n{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}HEADS-UP POKER vs YOUR BOT{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}\n")
+    print(f"Bot: {bot_path}")
+    print(f"Starting stacks: {starting_stack} chips")
+    print(f"Blinds: {small_blind}/{big_blind}\n")
+    print(f"{Colors.YELLOW}Action format:{Colors.ENDC}")
+    print(f"  -1 = Fold")
+    print(f"   0 = Check (when allowed)")
+    print(f"  >0 = Raise by that amount (or call/all-in)")
+    print(f"\n{Colors.BOLD}Good luck!{Colors.ENDC}\n")
+    input("Press Enter to start...")
+    
+    # Initialize game (player is index 0, bot is index 1)
+    game = PokerGame(["You", "Bot"], starting_stack=starting_stack, sb=small_blind, bb=big_blind)
+    player_idx = 0
+    bot_idx = 1
+    
+    hand_number = 1
+    
+    while not game.game_over:
+        print(f"\n\n{Colors.BOLD}{Colors.CYAN}{'='*60}")
+        print(f"HAND #{hand_number}")
+        print(f"{'='*60}{Colors.ENDC}\n")
+        
+        # Track if we should show showdown and save cards before they're cleared
+        reached_showdown = False
+        showdown_cards = None
+        showdown_community = None
+        
+        while not game.game_over:
+            # Show game state
+            display_game_state(game, player_idx)
+            
+            # Check if we're at showdown (all cards dealt, players still in)
+            if len(game.community_cards) == 5:
+                players_in = sum(1 for bet in game.bet_money if bet != -1)
+                if players_in > 1 and game.is_betting_round_complete():
+                    reached_showdown = True
+                    # Save cards before they get cleared
+                    showdown_cards = [cards.copy() for cards in game.players_cards]
+                    showdown_community = game.community_cards.copy()
+            
+            current_player_idx = game.index_to_action
+            
+            if current_player_idx == player_idx:
+                # Human player's turn
+                action = get_player_action(game, player_idx)
+                result = game.apply_action(action)
+                print(f"\n{Colors.CYAN}→ {result}{Colors.ENDC}")
+                
+                # Don't break here - let the loop continue to show the next state
+                # The hand will naturally end when someone folds or showdown completes
+                
+                # Prompt to continue after player action
+                input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
+            else:
+                # Bot's turn
+                print(f"\n{Colors.BOLD}🤖 Bot is thinking...{Colors.ENDC}")
+                bot_state = game.get_visible_state_for_player(bot_idx)
+                action, error = run_bot(bot_path, bot_state)
+                
+                if error:
+                    print(f"{Colors.RED}Bot error: {error}{Colors.ENDC}")
+                    print(f"{Colors.RED}Bot auto-folds{Colors.ENDC}")
+                    print(f"{Colors.YELLOW}Action value: -1 (fold){Colors.ENDC}")
+                else:
+                    # Show bot action clearly
+                    action_str = ""
+                    if action == -1:
+                        action_str = "FOLD"
+                    elif action == 0:
+                        action_str = "CHECK"
+                    elif action == game.get_call_amount():
+                        action_str = f"CALL {action}"
+                    elif action == game.held_money[bot_idx]:
+                        action_str = f"ALL-IN {action}"
+                    else:
+                        action_str = f"RAISE {action}"
+                    
+                    print(f"{Colors.BOLD}{Colors.YELLOW}Bot action: {action_str}{Colors.ENDC}")
+                
+                # Check for potential showdown BEFORE applying action
+                if len(game.community_cards) == 5:
+                    players_in = sum(1 for bet in game.bet_money if bet != -1)
+                    # If this action will complete the round, we're going to showdown
+                    if players_in > 1 and game.actions_this_round >= 1:
+                        reached_showdown = True
+                        showdown_cards = [cards.copy() for cards in game.players_cards]
+                        showdown_community = game.community_cards.copy()
+                
+                result = game.apply_action(action)
+                print(f"{Colors.CYAN}→ {result}{Colors.ENDC}")
+                
+                # Check if hand is over after bot action (before prompting)
+                hand_over = game.game_over or len(game.community_cards) == 0
+                
+                # Prompt after bot action so user can see what happened
+                # (but not if hand just ended - we'll prompt before next hand instead)
+                if not game.game_over and not hand_over:
+                    input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
+                
+                # If hand is over, handle showdown and break
+                if hand_over:
+                    if reached_showdown and not game.game_over and showdown_cards:
+                        show_showdown_with_cards(showdown_cards, showdown_community, player_idx)
+                    break
+        
+        # Prompt before starting next hand
+        if not game.game_over:
+            input(f"\n{Colors.BOLD}Press Enter to start next hand...{Colors.ENDC}")
+            hand_number += 1
+    
+    # Game over
+    print(f"\n\n{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}GAME OVER!{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}\n")
+    
+    if game.winner == "You":
+        print(f"{Colors.GREEN}{Colors.BOLD}🎉🎉🎉 CONGRATULATIONS! YOU WIN! 🎉🎉🎉{Colors.ENDC}")
+    else:
+        print(f"{Colors.RED}{Colors.BOLD}😞 Bot wins the match{Colors.ENDC}")
+    
+    print(f"\nFinal chip counts:")
+    print(f"  You: {game.held_money[player_idx]}")
+    print(f"  Bot: {game.held_money[bot_idx]}")
+    print()
+
+
+if __name__ == "__main__":
+    main()
