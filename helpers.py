@@ -156,39 +156,25 @@ def all_in(state: GameState) -> int:
     my_index = state.index_to_action
     return state.held_money[my_index]
 
-# return minimum legal raise amount for current player
+# return minimum legal raise amount for current player (2x the largest previous bet)
 def min_raise(state: GameState) -> int:
-    """
-    Compute the minimum amount (chips) the current player must put in this action to make a legal
-    raise according to standard poker rules.
-
-    The rule implemented:
-        - Determine the size of the last raise in the current betting round as
-            current_bet - previous_highest_bet
-        - If there is no previous raise (no lower bet), use the big blind as the minimum raise size
-        - The target total bet to reach is: current_bet + min_raise_size
-        - Return the amount the current player must put in (target_total - my_bet)
-    """
-    current_bet = max(state.bet_money) if state.bet_money else 0
     my_index = state.index_to_action
     my_bet = state.bet_money[my_index]
-
-    # find the highest bet that is strictly less than the current max bet
-    # exclude folded players (bet_money == -1)
-    lower_bets = [b for b in state.bet_money if 0 <= b < current_bet]
     
-    if lower_bets:
-        prev_max = max(lower_bets)
-        previous_raise = current_bet - prev_max
+    # Find the largest bet that anyone has made (including folded players at -1)
+    largest_bet = max(b for b in state.bet_money if b >= 0)
+    
+    # If no one has bet yet (all bets are 0), use big blind as minimum
+    if largest_bet == 0:
+        target_total_bet = state.big_blind
     else:
-        # if no lower bet exists, fall back to big blind
-        previous_raise = state.big_blind
-
-    min_raise_size = max(previous_raise, state.big_blind)
-    target_total_bet = current_bet + min_raise_size
+        # Minimum raise is 2x the largest bet
+        target_total_bet = largest_bet * 2
     
-    # amount the player must put in this action to reach target_total_bet
-    return max(0, target_total_bet - my_bet)
+    # Amount we need to put in to reach the target
+    min_raise_amount = target_total_bet - my_bet
+    
+    return min_raise_amount
 
 # Check if a proposed bet amount is valid in the current game state
 def is_valid_bet(state: GameState, amount: int) -> bool:
