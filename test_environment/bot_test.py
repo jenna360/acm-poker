@@ -200,18 +200,19 @@ def run_bot(bot_path: str, game_state) -> tuple[int, str]:
             memory_output_file = f.name
         
         # Create a wrapper script that loads the state and calls the bot
+        # Use repr() to properly escape file paths for Windows compatibility
         wrapper_code = f"""
 import sys
 import json
 import pickle
 
 # Load game state
-with open('{state_file}', 'r') as f:
+with open({repr(state_file)}, 'r') as f:
     state_data = json.load(f)
 
 # Load memory if it exists
 memory = None
-memory_file = '{memory_file}'
+memory_file = {repr(str(memory_file))}
 try:
     with open(memory_file, 'rb') as f:
         memory = pickle.load(f)
@@ -233,8 +234,8 @@ except (FileNotFoundError, EOFError):
     pass  # No memory file yet
 
 # Import the bot
-sys.path.insert(0, '{os.path.dirname(os.path.abspath(bot_path))}')
-bot_module = __import__('{Path(bot_path).stem}')
+sys.path.insert(0, {repr(os.path.dirname(os.path.abspath(bot_path)))})
+bot_module = __import__({repr(Path(bot_path).stem)})
 
 # Create state object
 class Pot:
@@ -265,7 +266,7 @@ try:
         print(action)
         # Save the new memory to output file
         if new_memory is not None:
-            with open('{memory_output_file}', 'wb') as f:
+            with open({repr(memory_output_file)}, 'wb') as f:
                 pickle.dump(new_memory, f)
         else:
             print(f"Bot returned None for memory", file=sys.stderr)
