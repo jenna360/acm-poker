@@ -283,7 +283,7 @@ def calculate_outs(state: GameState) -> dict:
                         else: # not a face card
                             card_to_add = f"{rank_val}{suit}"
                         if card_to_add not in dealt_cards:
-                            add_out(card_to_add, 2)
+                            add_out(card_to_add, 1)
 
     def high_pair() -> None:
         # if already exists, pair, exit
@@ -306,7 +306,7 @@ def calculate_outs(state: GameState) -> dict:
                     else: # not a face card
                         card_to_add = f"{rank_val}{suit}"
                     if card_to_add not in dealt_cards:
-                        add_out(card_to_add, 1)
+                        add_out(card_to_add, .7)
 
     def low_pair() -> None:
         # if already exists, pair, exit
@@ -330,7 +330,7 @@ def calculate_outs(state: GameState) -> dict:
                     else: # not a face card
                         card_to_add = f"{rank_val}{suit}"
                     if card_to_add not in dealt_cards:
-                        add_out(card_to_add, .5)
+                        add_out(card_to_add, .3)
 
 
     # find all outs
@@ -361,9 +361,9 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
         # if we have a pocket pair
         if card1_rank == card2_rank:
             hand_strength += 2.2*card1_rank
-        # if hole cards are suited
+        # if hole cards are suited and close together
         if card1_suit == card2_suit:
-            hand_strength += max(card1_rank, card2_rank)
+            hand_strength += max(card1_rank, card2_rank) - abs(card1_rank - card2_rank)
         # if hole cards are close in rank
         if 0 < abs(card1_rank - card2_rank) < 4:
             hand_strength += 3
@@ -383,21 +383,24 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
             hand_strength += 7
         # if someone raised a lot
         if amount_to_call(state) > 3 * state.big_blind:
-            hand_strength -= amount_to_call(state)/state.big_blind # this is kinda arbitrary lol
+            hand_strength -= (amount_to_call(state)/state.big_blind) / 2.5 # this is kinda arbitrary lol
 
         # ---------------------------------
         # BETTING !!
 
         # very strong hand -> bet 5 times the big blind (or call, if that's larger)
-        if hand_strength >= 40:
-            bet_amount += max(5*state.big_blind, amount_to_call(state), 2*state.bet_money[-1])
-        # moderately strong hand -> bet 2.5 times big blind
-        elif 30 < hand_strength < 40:
-            bet_amount += max(2.5*state.big_blind, amount_to_call(state), 2*state.bet_money[-1])
+        if hand_strength >= 60:
+            bet_amount += max(6*state.big_blind, amount_to_call(state), min_raise(state))
+        # moderately strong hand -> bet 4.5 times big blind
+        elif 35 < hand_strength < 60:
+            bet_amount += max(4.5*state.big_blind, amount_to_call(state), min_raise(state))
+        # moderately strong hand -> bet 3 times big blind
+        elif 25 < hand_strength < 35:
+            bet_amount += max(3*state.big_blind, amount_to_call(state), min_raise(state))
         # mid hand -> fold to moderate raises
-        elif 20 < hand_strength <= 30:
-            if amount_to_call(state) > 3*state.big_blind:
-                bet_amount += -1
+        elif 20 < hand_strength <= 25:
+            if amount_to_call(state) > 4*state.big_blind:
+                bet_amount = -1
             else:
                 bet_amount = amount_to_call(state)
         # trash hand -> check or fold
@@ -411,16 +414,16 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
         outs_dict = calculate_outs(state)
         outs_strength = sum(outs_dict.values())
         hand_strength += outs_strength
-        hand_strength += best_hand*3
-            # can change multiplier, 5 is arbitrary
+        hand_strength += best_hand*4
+            # can change multiplier, is arbitrary
             # (ex. if the bot's current best hand is a straight flush, this would add 8*5 = 40 to the hand strength)
             # (ex. if best hand is a pair, this would add 1*5 = 5 to the hand strength)
 
-        if hand_strength >= 60:
-            bet_amount = max(total_pot(state), amount_to_call(state), 2*state.bet_money[-1])
+        if hand_strength >= 70:
+            bet_amount = max(total_pot(state), amount_to_call(state), min_raise(state))
         # moderately strong hand -> bet 2.5 times big blind
-        elif 40 < hand_strength < 60:
-            bet_amount = 2*amount_to_call(state)
+        elif 40 < hand_strength < 70:
+            bet_amount = max(.5*total_pot(state), amount_to_call(state), min_raise(state))
         # mid hand -> fold to moderate raises
         elif 30 < hand_strength <= 40:
             if amount_to_call(state) > .5*total_pot(state):
@@ -429,31 +432,33 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
                 bet_amount = amount_to_call(state)
         # trash hand -> check or fold
         elif hand_strength <= 30:
-            if amount_to_call(state) == 0:
+            if amount_to_call(state) <= .3*total_pot(state):
                 bet_amount = amount_to_call(state) # check
             else:
                 bet_amount = -1 # fold
 
     elif get_round_name(state) == "Turn":
         outs_dict = calculate_outs(state)
-        outs_strength = sum(outs_dict.values())
+        outs_strength = (sum(outs_dict.values())) / 1.5
         hand_strength += outs_strength
-        hand_strength += best_hand*3
+        hand_strength += best_hand*4
 
-        if hand_strength >= 60:
-            bet_amount = max(total_pot(state), amount_to_call(state), 2*state.bet_money[-1])
-        # moderately strong hand -> bet 2.5 times big blind
-        elif 40 < hand_strength < 60:
-            bet_amount = 2*amount_to_call(state)
+        if hand_strength >= 70:
+            bet_amount = max(total_pot(state), amount_to_call(state), min_raise(state))
+        # moderately strong hand -> bet half pot
+        elif 40 < hand_strength < 70:
+            bet_amount = max(.5 * total_pot(state), min_raise(state))
         # mid hand -> fold to moderate raises
         elif 30 < hand_strength <= 40:
             if amount_to_call(state) > .5*total_pot(state):
                 bet_amount = -1
+            elif amount_to_call(state) == 0 and position(state) > .8: # if almost everyone checked -> senses weakness
+                bet_amount = .7*total_pot(state)
             else:
                 bet_amount = amount_to_call(state)
         # trash hand -> check or fold
         elif hand_strength <= 30:
-            if amount_to_call(state) == 0:
+            if amount_to_call(state) < (.3 * total_pot(state)):
                 bet_amount = amount_to_call(state) # check
             else:
                 bet_amount = -1 # fold
@@ -474,7 +479,7 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
                 bet_amount = amount_to_call(state)
         # trash hand -> check or fold
         elif hand_strength <= 30:
-            if amount_to_call(state) == 0:
+            if amount_to_call(state) < .2 * total_pot(state):
                 bet_amount = amount_to_call(state) # check
             else:
                 bet_amount = -1 # fold
