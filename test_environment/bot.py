@@ -353,6 +353,21 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
     bet_amount = 0
     best_hand = get_best_hand_from(state.player_cards, state.community_cards)[0]
     # use best_hand (integer 0-8) in post-flop
+
+    # consider individual card ranking in best hand
+    best_hand_cards = get_best_hand_from(state.player_cards, state.community_cards)[1]
+    best_hand_ranks = [];
+    for card in best_hand_cards:
+        best_hand_ranks.append(parse_card(card)[0]);
+    if best_hand_ranks: # if not empty
+        best_hand *= (0.1*max(best_hand_ranks));
+    
+    # consider if the bot's best hand is solely from community cards
+    best_com = get_best_hand_from([],state.community_cards)[1]
+    if best_com == best_hand_cards:
+        best_hand /= 2; # reduce value
+        # note: doesn't consider next best hand after ignoring best community-only hand
+
     
     if get_round_name(state) == "Pre-Flop":
         card1_rank, card1_suit = parse_card(state.player_cards[0])
