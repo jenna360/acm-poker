@@ -485,10 +485,10 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
                 bet_amount = -1 # fold
 
     # check for invalid raises
-    if bet_amount > state.held_money[state.index_to_action]:
-        bet_amount = state.held_money[state.index_to_action]
     if min_raise(state) > bet_amount > amount_to_call(state):
         bet_amount = amount_to_call(state)
-    
+    if bet_amount > state.held_money[state.index_to_action]:
+        bet_amount = state.held_money[state.index_to_action]
+        
     # cast bet_amount back into an int
     return int(bet_amount)
