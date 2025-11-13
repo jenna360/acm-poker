@@ -359,6 +359,8 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
     best_hand_ranks = [];
     for card in best_hand_cards:
         best_hand_ranks.append(parse_card(card)[0]);
+    if best_hand >3:
+        best_hand += 5;
     if best_hand_ranks: # if not empty
         best_hand *= (0.1*max(best_hand_ranks));
     
