@@ -413,7 +413,7 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
         if hand_strength >= 60:
             bet_amount += max(5.5*state.big_blind, amount_to_call(state), min_raise(state))
         # moderately strong hand -> bet 4.5 times big blind
-        elif  < hand_strength < 60:
+        elif 35 <= hand_strength < 60:
             bet_amount += max(4.5*state.big_blind, amount_to_call(state), min_raise(state))
         # moderately strong hand -> bet 3 times big blind
         elif 25 < hand_strength < 35:
