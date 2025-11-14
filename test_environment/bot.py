@@ -125,7 +125,6 @@ def calculate_outs(state: GameState) -> dict:
 
     def four_of_a_kind() -> None:
 
-
         # in case rank is 10-13, make dict to convert letter represenation later
         face_card = {10 : 't', 11 : 'j', 12 : 'q', 13 : 'k', 14 : 'a'}
 
@@ -347,7 +346,6 @@ def calculate_outs(state: GameState) -> dict:
     return out_cards;
 
 
-
 def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memory | None]:
     hand_strength = 20
     bet_amount = 0
@@ -369,7 +367,8 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
     if best_com == best_hand_cards:
         best_hand /= 2; # reduce value
         # note: doesn't consider next best hand after ignoring best community-only hand
-
+    else:
+        best_hand *= 1.5
     
     if get_round_name(state) == "Pre-Flop":
         card1_rank, card1_suit = parse_card(state.player_cards[0])
@@ -378,17 +377,19 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
         # if we have a pocket pair
         if card1_rank == card2_rank:
             hand_strength += 2.2*card1_rank
+        # prioritizes cards close in rank
+        if card1_rank != card2_rank:
+            hand_strength += max(card1_rank, card2_rank) - abs(card1_rank - card2_rank)
         # if hole cards are suited and close together
         if card1_suit == card2_suit:
             hand_strength += max(card1_rank, card2_rank) - abs(card1_rank - card2_rank)
-        # if hole cards are close in rank
-        if 0 < abs(card1_rank - card2_rank) < 4:
-            hand_strength += 3
+        
         # if both hole cards are high (don't update for pockets)
         if card1_rank > 10 and card2_rank > 10 and (card1_rank != card2_rank):
             hand_strength += 10
         elif card1_rank > 6 and card2_rank > 6 and (card1_rank != card2_rank):
             hand_strength += 6
+
         # if early position
         if position(state) < .4:
             hand_strength -= 2
@@ -397,19 +398,22 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
             hand_strength += 5
         # if we're in dealer position
         if position(state) == 1:
-            hand_strength += 7
+            hand_strength += 5
         # if someone raised a lot
         if amount_to_call(state) > 3 * state.big_blind:
-            hand_strength -= (amount_to_call(state)/state.big_blind) / 2.5 # this is kinda arbitrary lol
+            if hand_strength >= 60:
+                pass
+            else:
+                hand_strength -= (amount_to_call(state)/state.big_blind) / 4 # this is kinda arbitrary lol
 
         # ---------------------------------
         # BETTING !!
 
         # very strong hand -> bet 5 times the big blind (or call, if that's larger)
         if hand_strength >= 60:
-            bet_amount += max(6*state.big_blind, amount_to_call(state), min_raise(state))
+            bet_amount += max(5.5*state.big_blind, amount_to_call(state), min_raise(state))
         # moderately strong hand -> bet 4.5 times big blind
-        elif 35 < hand_strength < 60:
+        elif  < hand_strength < 60:
             bet_amount += max(4.5*state.big_blind, amount_to_call(state), min_raise(state))
         # moderately strong hand -> bet 3 times big blind
         elif 25 < hand_strength < 35:
@@ -492,6 +496,8 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
         elif 30 < hand_strength <= 40:
             if amount_to_call(state) > .5*total_pot(state):
                 bet_amount = -1
+            elif amount_to_call(state) == 0 and position(state) > .8:
+                bet_amount = 2*min_raise(state)
             else:
                 bet_amount = amount_to_call(state)
         # trash hand -> check or fold
