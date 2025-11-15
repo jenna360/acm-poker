@@ -365,7 +365,7 @@ def bet_helper(state: GameState, memory: Memory | None=None) -> tuple[int, Memor
     # consider if the bot's best hand is solely from community cards
     best_com = get_best_hand_from([],state.community_cards)[1]
     if best_com == best_hand_cards:
-        best_hand /= 2; # reduce value
+        best_hand /= 3; # reduce value
         # note: doesn't consider next best hand after ignoring best community-only hand
     else:
         best_hand *= 1.5
